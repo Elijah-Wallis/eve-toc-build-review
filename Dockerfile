@@ -42,9 +42,9 @@ COPY dashboard /app/dashboard
 COPY docs /app/docs
 COPY scripts /app/scripts
 COPY orchestration /app/orchestration
-COPY skills /app/skills
 COPY README.md Makefile main.py start_outbound_dialing /app/
 
+RUN mkdir -p /app/skills
 RUN chown -R appuser:appuser /app /opt/venv
 
 USER appuser

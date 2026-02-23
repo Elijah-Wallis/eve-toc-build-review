@@ -182,6 +182,35 @@ Failure triage:
 - First call fails with Gemini import/runtime error: image built without `gemini` extra.
 - Retell cannot connect to WS host: Cloudflare tunnel ingress/DNS/port mismatch.
 
+## Public evaluation handoff (sanitized GitHub snapshot)
+
+Use the canonical export script to publish a review-safe snapshot that preserves `.env.example` while excluding real local secrets and runtime artifacts:
+
+```bash
+bash scripts/export_public_handoff.sh --repo Elijah-Wallis/eve-toc-build-review --push
+```
+
+Handoff policy:
+
+- `.env.example` is intentionally public and included.
+- Local secret env files (for example `.env`, `.env.*.local`, `.env.cloudflare.local`) are excluded.
+- Logs, call artifacts, and `artifacts/` are excluded.
+- The export aborts if the built-in secret scan detects likely credentials.
+
+Quick evaluator validation (fresh clone):
+
+```bash
+git clone https://github.com/Elijah-Wallis/eve-toc-build-review
+cd eve-toc-build-review
+test -f .env.example
+cp .env.example .env
+# fill placeholders, then:
+docker build -t eve-brain .
+docker compose up --build -d
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8080/metrics | head
+```
+
 Dashboard:
 
 - One command: `make dashboard` (starts server + opens dashboard)
