@@ -173,7 +173,7 @@ class BrainConfig:
     b2b_org_name: str = "Eve"
     b2b_auto_disclosure: bool = False
     eve_v7_enabled: bool = True
-    eve_v7_script_path: str = "/Users/elijah/Documents/New project/orchestration/eve-v7-orchestrator.yaml"
+    eve_v7_script_path: str = "orchestration/eve-v7-orchestrator.yaml"
     b2b_business_name: str = "Clinic"
     b2b_city: str = "Plano"
     b2b_test_timestamp: str = "Saturday at 6:30 PM"
@@ -318,7 +318,7 @@ class BrainConfig:
             eve_v7_enabled=_getenv_bool("EVE_V7_ENABLED", True),
             eve_v7_script_path=_getenv_str(
                 "EVE_V7_SCRIPT_PATH",
-                "/Users/elijah/Documents/New project/orchestration/eve-v7-orchestrator.yaml",
+                "orchestration/eve-v7-orchestrator.yaml",
             ),
             b2b_business_name=_getenv_str("B2B_BUSINESS_NAME", clinic_name),
             b2b_city=_getenv_str("B2B_CITY", clinic_city),

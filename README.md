@@ -215,7 +215,7 @@ Dashboard:
 
 - One command: `make dashboard` (starts server + opens dashboard)
 - One command shortcut: `make start` (build queue and start outbound calls)
-- Full launcher: `/Users/elijah/Documents/New project/start_outbound_dialing`  
+- Full launcher: `./start_outbound_dialing`  
   (checks `RETELL_API_KEY`, `RETELL_FROM_NUMBER`, `B2B_AGENT_ID`, starts live outbound dialing, then opens the dashboard)
 - Open directly: `http://127.0.0.1:8080/dashboard/`
 - APIs: `/api/dashboard/summary`, `/api/dashboard/repo-map`, `/api/dashboard/sop`, `/api/dashboard/readme`

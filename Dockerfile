@@ -54,4 +54,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=20s \
   CMD python -c "import urllib.request; raise SystemExit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).getcode()==200 else 1)"
 
-CMD ["sh", "-lc", "exec uvicorn app.server:app --host 0.0.0.0 --port 8080 --workers ${UVICORN_WORKERS:-2}"]
+CMD ["sh", "-c", "exec uvicorn app.server:app --host 0.0.0.0 --port 8080 --workers ${UVICORN_WORKERS:-2}"]
