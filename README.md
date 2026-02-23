@@ -128,6 +128,60 @@ Run server:
 python3 -m uvicorn app.server:app --host 0.0.0.0 --port 8080
 ```
 
+## Production (Single Host Compose + Cloudflare) - canonical deploy path
+
+Bootstrap config:
+
+```bash
+cp .env.example .env
+```
+
+- Fill required values in `.env` before any live calls (Retell, Gemini, Supabase, n8n).
+- Keep secrets out of git.
+- `scripts/cloudflare_verify.sh` reads `.env.cloudflare.local` by default, so mirror your Cloudflare vars there (or export them) before verification.
+
+Local hard gate (recommended before image build):
+
+```bash
+make ci
+```
+
+Container build + boot:
+
+```bash
+docker build -t eve-brain .
+docker compose up --build -d
+```
+
+Smoke checks:
+
+```bash
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8080/metrics | head
+```
+
+- Open dashboard: `http://127.0.0.1:8080/dashboard/`
+
+Cloudflare verification:
+
+```bash
+./scripts/cloudflare_verify.sh
+```
+
+- Confirm `voice-agent.evesystems.org` resolves and tunnel ingress points to the same host port used by compose (`EVE_BRAIN_HOST_PORT`, default `8080`).
+
+Retell production lock verification (before a live batch):
+
+- Verify the B2B agent websocket URL is `wss://voice-agent.evesystems.org/llm-websocket`.
+- Run `scripts/verify_voice_agent_lock.sh`.
+- Run one controlled lab-number call before live outbound dialing.
+
+Failure triage:
+
+- `/health` works but `/metrics` or `/dashboard/` fails: wrong container entrypoint/runtime image drift.
+- First call fails with Gemini import/runtime error: image built without `gemini` extra.
+- Retell cannot connect to WS host: Cloudflare tunnel ingress/DNS/port mismatch.
+
 Dashboard:
 
 - One command: `make dashboard` (starts server + opens dashboard)
@@ -182,12 +236,12 @@ Cloudflare production WebSocket checklist (for calling from Retell):
   - `BRAIN_WSS_BASE_URL` should point at a stable, resolvable host (example: `wss://voice-agent.evesystems.org/llm-websocket`), not a temporary `*.trycloudflare.com` name.
   - The host must resolve to a configured Cloudflare tunnel ingress and route to the local port where the brain is actually running.
 - For the current workspace:
-  - Cloudflare currently has `voice-agent.evesystems.org -> http://127.0.0.1:8099` tunnel ingress.
-  - Run the brain on port `8099` when receiving calls via this stable host.
+  - Canonical compose deployment exposes the brain on host port `8080` by default (`EVE_BRAIN_HOST_PORT=8080`).
+  - If your tunnel ingress still points to `http://127.0.0.1:8099`, either update the tunnel ingress to `8080` or set `EVE_BRAIN_HOST_PORT=8099` before `docker compose up`.
   - `scripts/cloudflare_verify.sh` validates token + tunnel ingress + DNS.
 - Practical zero-downtime checks before a call:
   1. Run `./scripts/cloudflare_verify.sh` and confirm `dns_ok=True` for `voice-agent.evesystems.org`.
-  2. Confirm brain is reachable: `nc -vz 127.0.0.1 8099`.
+  2. Confirm brain is reachable on the host port used by compose (default `8080`): `nc -vz 127.0.0.1 ${EVE_BRAIN_HOST_PORT:-8080}`.
  3. Confirm agent websocket URL matches env:
      ```bash
      python3 - <<'PY'

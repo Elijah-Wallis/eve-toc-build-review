@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "retell-ws-brain"
 version = "0.1.0"
@@ -29,3 +33,6 @@ ops = [
 testpaths = ["tests", "tests_expressive"]
 addopts = "-q"
 pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
