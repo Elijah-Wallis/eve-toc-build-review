@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$SCRIPT_DIR"
+cd "$ROOT_DIR"
+
+ENV_FILE="${RETELL_ENV_FILE:-$ROOT_DIR/.env.retell.local}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
+required_env=(
+  RETELL_API_KEY
+  RETELL_FROM_NUMBER
+  B2B_AGENT_ID
+  APIFY_API_TOKEN
+)
+
+missing=()
+for key in "${required_env[@]}"; do
+  value="${!key:-}"
+  if [ -z "${value}" ]; then
+    missing+=("$key")
+  fi
+done
+
+if [ "${#missing[@]}" -gt 0 ]; then
+  echo "Missing required environment variables: ${missing[*]}"
+  echo "Set these in ${ENV_FILE} and retry:"
+  for key in "${missing[@]}"; do
+    echo "  export ${key}=<value>"
+  done
+  exit 1
+fi
+
+LOG_DIR="$ROOT_DIR/logs"
+mkdir -p "$LOG_DIR"
+OUTBOUND_LOG="$LOG_DIR/start_outbound_dialing.log"
+DASHBOARD_LOG="$LOG_DIR/start_outbound_dashboard.log"
+
+printf "Starting outbound dialing...\n"
+(
+  make start-outbound-dialing
+) >> "$OUTBOUND_LOG" 2>&1 &
+CALL_PID=$!
+
+sleep 2
+if kill -0 "$CALL_PID" 2>/dev/null; then
+  echo "Outbound job started (PID: $CALL_PID). Log: $OUTBOUND_LOG"
+else
+  echo "Outbound command exited before dashboard launch. Check: $OUTBOUND_LOG"
+  exit 2
+fi
+
+DASH_URL="http://127.0.0.1:8080/dashboard/"
+if command -v lsof >/dev/null 2>&1 && lsof -iTCP:8080 -sTCP:LISTEN -Pn | grep -q LISTEN; then
+  echo "Dashboard server is already running at $DASH_URL"
+  if command -v open >/dev/null 2>&1; then
+    open "$DASH_URL" >/dev/null 2>&1 || true
+  else
+    echo "Open this URL in your browser: $DASH_URL"
+  fi
+else
+  echo "Launching dashboard..."
+  (
+    bash "$ROOT_DIR/scripts/run_dashboard.sh"
+  ) >> "$DASHBOARD_LOG" 2>&1 &
+  DASH_PID=$!
+  sleep 1
+  if command -v open >/dev/null 2>&1; then
+    open "$DASH_URL" >/dev/null 2>&1 || true
+  else
+    echo "Open this URL in your browser: $DASH_URL"
+  fi
+  echo "Dashboard started (PID: $DASH_PID). Log: $DASHBOARD_LOG"
+fi
+
+echo "Use 'tail -f $OUTBOUND_LOG' to watch live logs."
+wait "$CALL_PID"

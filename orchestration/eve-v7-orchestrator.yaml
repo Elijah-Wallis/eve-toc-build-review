@@ -1,0 +1,384 @@
+version: "7.0"
+id: eve_medspa_apex_predator_v7
+name: EVE MedSpa Apex Predator Orchestrator
+mode: deterministic_state_machine
+
+agent:
+  id: eve_medspa_apex_predator_v7
+  name: Cassidy
+  role: Clinical Intake Auditor
+  voice_profile:
+    model: soft_authoritative_female
+    pace: 0.92
+    interruption_sensitivity: MAX
+    post_turn_silence_ms: 1200
+    sentiment_latency_ms:
+      normal: 1200
+      hostile: 2000
+
+contracts:
+  - name: send_evidence_package
+    description: Trigger evidence delivery (email + optional SMS)
+    parameters:
+      type: object
+      required:
+        - recipient_email
+        - delivery_method
+        - artifact_type
+      properties:
+        recipient_email:
+          type: string
+          format: email
+        delivery_method:
+          type: string
+          enum:
+            - EMAIL_ONLY
+            - EMAIL_AND_SMS
+        artifact_type:
+          type: string
+          enum:
+            - AUDIO_LINK
+            - FAILURE_LOG_PDF
+  - name: mark_dnc_compliant
+    description: Adds number to Do-Not-Call list
+    parameters:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          enum:
+            - USER_REQUEST
+            - WRONG_NUMBER
+            - HOSTILE
+
+compliance:
+  disclosure_if_asked_about_ai: "I'm Cassidy, an automated intake auditor running a capacity test for the clinic."
+  dnc_handler:
+    tool: mark_dnc_compliant
+    default_reason: USER_REQUEST
+  explicit_consent:
+    stop_signal: STOP
+
+state_variables:
+  required:
+    - clinic_name
+    - city
+    - business_name
+    - test_timestamp
+    - evidence_type
+    - contact_number
+  defaults:
+    artifact_type: FAILURE_LOG_PDF
+    missed_treatment: "$1,500 Botox or Morpheus8 consult"
+    emr_system: "Zenoti, Boulevard, or MangoMint"
+
+parser:
+  extraction:
+    clinic_name:
+      sources:
+        - session
+      required: true
+    city:
+      sources:
+        - session
+      required: true
+    business_name:
+      sources:
+        - session
+      required: true
+    test_timestamp:
+      sources:
+        - session
+      required: true
+    evidence_type:
+      sources:
+        - session
+      required: true
+    recipient_email:
+      sources:
+        - session
+        - extracted_entity
+      required: false
+    artifact_type:
+      sources:
+        - evidence_type
+      transform: |
+        if evidence_type in ["AUDIO", "AUDIO_LINK", "VOICE", "call_recording"] -> AUDIO_LINK
+        else -> FAILURE_LOG_PDF
+  regex:
+    email: '(?i)\\b[\\w.%+-]+@[\\w.-]+\\.[a-z]{2,}\\b'
+    dnc: '(?i)\\b(do not call|stop calls|remove from list|delete my number|unsubscrib|opt out)\\b'
+    ai_disclosure: '(?i)\\b(are you a robot|are you ai|are you a bot|is this a bot|is this ai)\\b'
+    hostile: '(?i)\\b(hang up|you idiot|f[\\*]*ck|damn|shut up|you are )\\b'
+    answering_service: '(?i)\\b(answering service|call center|virtual assistant|VA)\\b'
+    is_sales: '(?i)\\b(are you a sales call|this is a sales|sales call|marketing agency)\\b'
+    info_email: '(?i)\\b(info@|front desk|frontdesk|generic inbox)\\b'
+    skeptical: '(?i)\\b(not interested|not buying|not going to send|sounds like spam)\\b'
+
+intent_labels:
+  - name: hostile
+    source: "regex+llm"
+    rules:
+      - type: regex
+        value: dnc
+      - type: regex
+        value: hostile
+      - type: llm_sentiment
+        value: NEGATIVE_HIGH
+  - name: dnc
+    source: "regex+llm"
+    rules:
+      - type: regex
+        value: dnc
+      - type: llm_intent
+        value: do_not_contact
+  - name: ai_disclosure
+    source: regex
+    rules:
+      - type: regex
+        value: ai_disclosure
+  - name: answering_service
+    source: "regex+llm"
+    rules:
+      - type: regex
+        value: answering_service
+      - type: llm_intent
+        value: has_call_handling
+  - name: is_sales
+    source: regex
+    rules:
+      - type: regex
+        value: is_sales
+  - name: info_email
+    source: regex
+    rules:
+      - type: regex
+        value: info_email
+  - name: skeptical
+    source: regex
+    rules:
+      - type: regex
+        value: skeptical
+  - name: user_provides_direct_email
+    source: regex
+    rules:
+      - type: regex
+        value: email
+    capture: extracted_email
+  - name: user_wants_sms
+    source: llm_intent
+    rules:
+      - type: llm_intent
+        value: wants_sms
+  - name: user_accepts_send
+    source: llm_intent
+    rules:
+      - type: llm_intent
+        value: accepts
+
+flow:
+  start: opener
+
+  states:
+    opener:
+      say: |
+        Hi... this is Cassidy.
+        I'm actually looking at a clinical intake audit for {{clinic_name}}, and to be honest, I feel terrible if I'm catching you in the middle of checking out a patient?
+      wait_ms: 1200
+      transitions:
+        - when: sentiment == hostile
+          goto: hostility_handler
+        - when: user_intent == ai_disclosure
+          goto: disclose_ai
+        - when: user_intent == dnc
+          goto: dnc
+        - when: true
+          goto: discovery
+
+    disclose_ai:
+      say: "{{compliance.disclosure_if_asked_about_ai}}"
+      goto: discovery
+
+    hostility_handler:
+      say: |
+        It sounds like today is an absolute dumpster fire at the front desk.
+        Should I just delete this lost patient log and let you go?
+      latency_ms: 2000
+      goto: discovery
+
+    discovery:
+      say: |
+        Okay, thanks for taking a second.
+        I was reviewing a capacity test we ran on your phone lines {{test_timestamp}}.
+        A call for a {{missed_treatment}} completely dropped into voicemail.
+        Quick question—when you unlock the clinic on Monday mornings, are you usually walking into a massive pile of weekend voicemails or is your front desk system airtight?
+      wait_ms: 1200
+      transitions:
+        - when: sentiment == hostile
+          goto: hostility_handler
+        - when: user_reply in [yes, true, admits_pain]
+          goto: pain_admitted
+        - when: user_reply in [no, denies, not_like_that]
+          goto: pain_denied
+        - when: user_intent == dnc
+          goto: dnc
+        - when: true
+          goto: pain_denied
+
+    pain_admitted:
+      say: |
+        That makes sense. The Monday mess is where high-ticket consults often fall through the cracks.
+        I have the {{evidence_type}} file for that dropped patient.
+        I don't want to add to your plate right now—would it be a ridiculous idea to email this log to the Practice Manager so they can see the gap?
+      wait_ms: 1200
+      transitions:
+        - when: user_intent in [skeptical, is_sales]
+          goto: objection_sales
+        - when: user_intent == answering_service
+          goto: objection_answering_service
+        - when: user_intent == info_email
+          goto: objection_info_email
+        - when: user_intent == user_accepts_send
+          goto: send_package_prompt
+        - when: user_intent == dnc
+          goto: dnc
+        - when: true
+          goto: send_package_prompt
+
+    pain_denied:
+      say: |
+        That's actually impressive.
+        Most aesthetic clinics in {{city}} struggle with that.
+        Our data shows 73% of patients that hit voicemail on high-ticket procedures often stop replying and go elsewhere.
+        I have the {{evidence_type}} of where your specific line failed.
+        Would you be opposed to me sending it over to the Medical Director as proof the system leaked?
+      transitions:
+        - when: user_intent in [skeptical, is_sales]
+          goto: objection_sales
+        - when: user_intent == answering_service
+          goto: objection_answering_service
+        - when: user_intent == info_email
+          goto: objection_info_email
+        - when: user_intent == user_accepts_send
+          goto: send_package_prompt
+        - when: user_intent == dnc
+          goto: dnc
+        - when: true
+          goto: send_package_prompt
+
+    objection_answering_service:
+      say: |
+        I hear you. Most 7-figure clinics do.
+        But does your service collect booking deposit and schedule into {{emr_system}},
+        or does it just capture name and number for follow-up call?
+        Right, that message gap is exactly where patients drift away. Should I send it to keep this visible?
+      transitions:
+        - when: true
+          goto: send_package_prompt
+
+    objection_info_email:
+      say: |
+        I can definitely try that inbox.
+        Generic front-desk inboxes often trigger spam filters on audio or logs, so leadership may not see revenue impact.
+        Is there a direct clinical ops or manager email you want me to use instead?
+      transitions:
+        - when: user_intent == user_provides_direct_email
+          set:
+            recipient_email: "{{extracted_email}}"
+          goto: send_package_prompt
+        - when: true
+          goto: send_package_prompt
+
+    objection_sales:
+      say: |
+        It sounds like you get absolutely hammered by marketing agencies, so I get why you're asking.
+        I'm not an agency. I'm a diagnostician sending a missed-lead report.
+        If you are fully booked and don't care about this dropped consult, I can delete it right now.
+        ...completely up to you?
+      transitions:
+        - when: true
+          goto: send_package_prompt
+
+    send_package_prompt:
+      ask: |
+        Great. I can route this now.
+        If I send one evidence copy, should it be email only or email + SMS to make sure it lands?
+      transitions:
+        - when: user_intent == user_wants_sms
+          set:
+            delivery_method: EMAIL_AND_SMS
+          goto: send_package
+        - when: true
+          set:
+            delivery_method: EMAIL_ONLY
+          goto: send_package
+
+    send_package:
+      precondition:
+        require:
+          - variable: recipient_email
+            missing_goto: request_recipient_email
+          - variable: artifact_type
+            assign: "{{artifact_type}}"
+            default: FAILURE_LOG_PDF
+      tool: send_evidence_package
+      tool_args:
+        recipient_email: "{{recipient_email}}"
+        delivery_method: "{{delivery_method}}"
+        artifact_type: "{{artifact_type}}"
+      on_success:
+        say: |
+          Perfect. I'm routing that now.
+          Would it be a terrible idea if I also send a short text with the exact drop timestamp so your team can review it without digging through voicemail?
+      on_failure:
+        say: |
+          I couldn’t send that package in this attempt.
+          Share the direct manager email and I’ll retry immediately.
+      transitions:
+        - when: true
+          goto: done
+
+    request_recipient_email:
+      ask: |
+        I can’t route it until I have a direct manager email.
+        You can send it to me now and I’ll retry immediately.
+      transitions:
+        - when: user_intent == user_provides_direct_email
+          set:
+            recipient_email: "{{extracted_email}}"
+            delivery_method: "{{delivery_method}}"
+            artifact_type: "{{artifact_type}}"
+          goto: send_package
+        - when: true
+          goto: request_recipient_email
+
+    dnc:
+      say: |
+        Done. You’re off the list.
+        For audit notes, do you want me to log 'not taking consults' or 'bad time to reach'?
+      tool: mark_dnc_compliant
+      tool_args:
+        reason: USER_REQUEST
+      goto: done
+
+    done:
+      say: |
+        Appreciate you taking the time.
+        If anything changes, reply STOP to stop contact.
+
+assurance_checks:
+  required_before_send:
+    - assert: recipient_email is present
+    - assert: delivery_method in [EMAIL_ONLY, EMAIL_AND_SMS]
+    - assert: artifact_type in [AUDIO_LINK, FAILURE_LOG_PDF]
+  guardrails:
+    - trigger: dnc intent detected
+      action: mark_dnc_compliant(USER_REQUEST)
+    - trigger: hostile sentiment > 0.85
+      action: route_to hostility_handler and raise latency to 2000
+    - trigger: ai_disclosure request
+      action: disclose policy
+    - trigger: no explicit consent + user says STOP
+      action: route_to dnc

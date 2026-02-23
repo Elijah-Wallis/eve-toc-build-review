@@ -1,0 +1,1078 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eve Outbound Dialing - Live Dashboard</title>
+  <style>
+    :root {
+      --bg: #071025;
+      --panel: #111a32;
+      --panel-soft: #0e1730;
+      --border: #263b6e;
+      --text: #ebf1ff;
+      --muted: #9db0df;
+      --ok: #1fc27b;
+      --warn: #efb53f;
+      --bad: #f06b6b;
+      --idle: #7f8cb2;
+      --accent: #5fa8ff;
+      --mono: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(120% 120% at 0% 0%, #14234f 0%, transparent 55%),
+        radial-gradient(120% 120% at 100% 0%, #0f2b61 0%, transparent 45%),
+        var(--bg);
+      color: var(--text);
+    }
+    .frame {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 2.8vw, 1.9rem);
+    }
+    .pulse {
+      height: 10px;
+      width: 10px;
+      border-radius: 99px;
+      background: var(--warn);
+      display: inline-block;
+      margin-right: 8px;
+      animation: pulse 1.1s infinite;
+    }
+    .pulse.ok { background: var(--ok); animation: none; }
+    .pulse.down { background: var(--bad); animation: none; }
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      70% { transform: scale(1.2); opacity: 0.25; }
+      100% { transform: scale(0.9); opacity: 0.9; }
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      background: linear-gradient(180deg, var(--panel-soft), var(--panel));
+      box-shadow: 0 4px 22px rgba(0, 0, 0, 0.25);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .kpi {
+      margin: 0;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .kpi h3 {
+      margin: 0 0 6px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .kpi .value {
+      margin: 0;
+      font-size: 1.45rem;
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+    .timeline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .step {
+      flex: 1 1 180px;
+      min-width: 150px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,0.03);
+    }
+    .step .label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-bottom: 6px;
+    }
+    .step .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 99px;
+      display: inline-block;
+    }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    .dot.idle { background: var(--idle); }
+    .dot.bad { background: var(--bad); }
+    .mono {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+    }
+    .list {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.45;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .chip {
+      display: inline-flex;
+      margin: 4px 6px 0 0;
+      padding: 5px 9px;
+      border-radius: 99px;
+      background: rgba(130, 160, 255, 0.16);
+      border: 1px solid rgba(130, 160, 255, 0.4);
+      font-size: 0.82rem;
+      font-family: var(--mono);
+    }
+    .error {
+      color: var(--bad);
+      font-weight: 700;
+      margin-top: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.93rem;
+    }
+    .table-wrap {
+      overflow-x: auto;
+    }
+    th, td {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      text-align: left;
+      padding: 8px 6px;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    td { white-space: nowrap; }
+    .business-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .business-link:hover {
+      text-decoration: underline;
+    }
+    .transcript-cell {
+      max-width: 390px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin: 0;
+    }
+    .call-id-badge {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      display: block;
+      margin-top: 4px;
+    }
+    .call-detail-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 16, 37, 0.88);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+      padding: 16px;
+    }
+    .call-detail-modal.open {
+      display: flex;
+    }
+    .call-detail-panel {
+      width: min(980px, 100%);
+      background: linear-gradient(180deg, var(--panel-soft), var(--panel));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      max-height: 90vh;
+      overflow: auto;
+      box-shadow: 0 12px 38px rgba(0, 0, 0, 0.45);
+    }
+    .call-detail-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .close-detail {
+      border: 0;
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .call-detail-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .detail-card {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 8px;
+      background: rgba(255,255,255,0.03);
+    }
+    .detail-card h4 {
+      margin: 0 0 6px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 600;
+    }
+    .detail-line {
+      margin: 3px 0;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+    }
+    .transcript-log {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 8px;
+      margin-top: 10px;
+      background: rgba(255,255,255,0.03);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow: auto;
+      font-size: 0.84rem;
+      line-height: 1.35;
+    }
+    .action-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status-chip {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(130, 160, 255, 0.14);
+      border: 1px solid rgba(130, 160, 255, 0.45);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      white-space: nowrap;
+    }
+    .status-chip.warn {
+      background: rgba(255, 193, 77, 0.15);
+      border-color: rgba(255, 193, 77, 0.55);
+      color: #ffd18d;
+    }
+    .status-chip.bad {
+      background: rgba(255, 110, 110, 0.16);
+      border-color: rgba(255, 110, 110, 0.45);
+      color: #ff9a9a;
+    }
+    .status-chip.ok {
+      background: rgba(88, 204, 150, 0.16);
+      border-color: rgba(88, 204, 150, 0.45);
+      color: #9ef0c3;
+    }
+    .btn {
+      border: 0;
+      border-radius: 9px;
+      padding: 8px 12px;
+      background: linear-gradient(180deg, #2955cc, #153a9f);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .control-card {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .control-card h4 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 600;
+    }
+    .control-row {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .control-row label {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .slider {
+      width: 100%;
+      accent-color: #5fa8ff;
+    }
+    .control-value {
+      color: var(--accent);
+      font-weight: 700;
+      font-family: var(--mono);
+      font-size: 0.96rem;
+    }
+    @media (max-width: 780px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="top">
+      <div>
+        <h1>🚀 Outbound Dialing Live Dashboard</h1>
+        <p class="hint" id="campaign">Loading campaign...</p>
+      </div>
+      <div class="action-row">
+        <button class="btn" id="startBtn">Start Dialing</button>
+        <button class="btn" id="stopBtn">Stop Launcher</button>
+        <span id="launchState" class="status-chip">Launcher: unknown</span>
+        <span id="startStatus" class="hint">Ready</span>
+        <span id="ping" class="pulse"></span><span id="stateText" class="hint">Connecting...</span>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <section class="card">
+      <h3>Live Outbound Controls</h3>
+      <p class="hint" id="controlState">Loading controls…</p>
+      <div class="control-grid">
+        <div class="control-card">
+          <h4>Next Session Size</h4>
+          <div class="control-row">
+            <label for="maxCallsRange">Max calls</label>
+            <input id="maxCallsRange" class="slider" type="range" min="1" max="50" step="1" />
+            <div class="control-row">
+              <span class="control-value" id="maxCallsValue">5</span>
+            </div>
+          </div>
+          <button class="btn" id="applyMaxCallsBtn">Apply max calls</button>
+        </div>
+        <div class="control-card">
+          <h4>Concurrency</h4>
+          <div class="control-row">
+            <label for="concurrencyRange">Concurrent calls</label>
+            <input id="concurrencyRange" class="slider" type="range" min="1" max="20" step="1" />
+            <div class="control-row">
+              <span class="control-value" id="concurrencyValue">5</span>
+            </div>
+          </div>
+          <button class="btn" id="applyConcurrencyBtn">Apply concurrency</button>
+        </div>
+        <div class="control-card">
+          <h4>Emergency Stop</h4>
+          <div class="control-row">
+            <span class="hint">Stops next outbound run before dispatching calls.</span>
+          </div>
+          <div class="action-row">
+            <button class="btn" id="pauseBtn">Pause next run</button>
+            <button class="btn" id="resumeBtn">Resume next run</button>
+          </div>
+          <p id="pauseState" class="hint" style="margin-top:8px;">Stop state: unknown</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="kpi">
+        <h3>Leads in Queue</h3>
+        <p class="value" id="kpiQueue">—</p>
+      </div>
+      <div class="kpi">
+        <h3>Calls Attempted (Today)</h3>
+        <p class="value" id="kpiDaily">—</p>
+      </div>
+      <div class="kpi">
+        <h3>Call Artifacts</h3>
+        <p class="value" id="kpiCalls">—</p>
+      </div>
+      <div class="kpi">
+        <h3>Mapped Journeys</h3>
+        <p class="value" id="kpiJourneys">—</p>
+      </div>
+      <div class="kpi">
+        <h3>Pipeline State</h3>
+        <p class="value" id="kpiPipeline">—</p>
+      </div>
+    </section>
+
+    <section class="two-col">
+      <article class="card">
+        <h3>Conversion Breakdown</h3>
+        <div id="conversion" class="hint">No data yet.</div>
+      </article>
+      <article class="card">
+        <h3>Call Status</h3>
+        <div id="callStatus" class="hint">No data yet.</div>
+      </article>
+    </section>
+
+    <section class="card">
+      <h3>Latest Calls</h3>
+      <div id="latestError" class="error" style="display:none;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Business</th>
+              <th>To</th>
+              <th>Transcript</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="latestCalls">
+            <tr><td colspan="4" class="hint">Waiting for calls...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Segment Overview</h3>
+      <div id="segments"></div>
+    </section>
+
+    <section class="card">
+      <h3>What’s happening under the hood</h3>
+      <ul class="list">
+        <li>1) Build live queue from leads (or Apify/local file).</li>
+        <li>2) Dispatch calls with Retell + metadata for each lead.</li>
+        <li>3) Map outcomes from transcripts into journey events.</li>
+        <li>4) Feed n8n follow-up and nurture actions.</li>
+        <li>5) Export outcomes to Supabase and Ops summaries.</li>
+      </ul>
+      <p class="hint">Tip: keep this running while dialing to confirm each step lights up green.</p>
+    </section>
+  </div>
+
+  <div class="call-detail-modal" id="callDetailModal" aria-live="polite" role="dialog" aria-modal="true" aria-labelledby="callDetailTitle">
+    <div class="call-detail-panel">
+      <div class="call-detail-head">
+        <div>
+          <h2 id="callDetailTitle" style="margin:0 0 2px;font-size:1.1rem;">Call Detail</h2>
+          <p id="callDetailSub" class="hint" style="margin:0;">Loading call artifact...</p>
+        </div>
+        <button class="close-detail" id="closeCallDetail">Close</button>
+      </div>
+
+      <div class="call-detail-meta">
+        <article class="detail-card">
+          <h4>Call Meta</h4>
+          <div id="callMetaLine1" class="detail-line"></div>
+          <div id="callMetaLine2" class="detail-line"></div>
+          <div id="callMetaLine3" class="detail-line"></div>
+        </article>
+        <article class="detail-card">
+          <h4>Tool Calls</h4>
+          <div id="callTools" class="detail-line"></div>
+        </article>
+        <article class="detail-card">
+          <h4>Outcome</h4>
+          <div id="callOutcome" class="detail-line"></div>
+          <div id="callRecordingLink" class="detail-line"></div>
+        </article>
+      </div>
+
+  <div class="call-detail-card detail-card" style="margin-top: 10px;">
+        <h4>Transcript</h4>
+        <div id="callTranscriptLink" class="detail-line" style="margin-bottom: 8px;"></div>
+        <div id="callTranscript" class="transcript-log">No transcript loaded.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const stepLabels = [
+      { key: "intake", label: "Lead Intake Ready" },
+      { key: "dispatch", label: "Retell Dispatch Running" },
+      { key: "mapping", label: "Journey Mapping" },
+      { key: "persistence", label: "Supabase Dispatch" },
+      { key: "nurture", label: "Nurture Signals" },
+    ];
+
+    const statusClassByState = {
+      ok: "ok",
+      running: "warn",
+      idle: "idle",
+      bad: "bad",
+    };
+
+    const state = {
+      detailOpen: false,
+      controls: {
+        max_calls: 5,
+        concurrency: 5,
+        stop_requested: false,
+      },
+    };
+
+    function fmtInt(v) { return String(Number(v || 0)); }
+
+    function escapeHtml(value) {
+      const s = String(value == null ? "" : value);
+      return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    }
+
+    function closeCallDetail() {
+      if (window.__retellTranscriptUrl) {
+        URL.revokeObjectURL(window.__retellTranscriptUrl);
+        window.__retellTranscriptUrl = null;
+      }
+      const modal = document.getElementById("callDetailModal");
+      modal.classList.remove("open");
+      state.detailOpen = false;
+    }
+
+    async function fetchOutboundControls() {
+      try {
+        const res = await fetch("/api/dashboard/outbound-controls", { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("Could not load outbound controls.");
+        }
+        const payload = await res.json();
+        const controls = payload?.controls || {};
+        state.controls = {
+          max_calls: Number(controls.max_calls || 0),
+          concurrency: Number(controls.concurrency || 0),
+          stop_requested: controls.stop_requested || false,
+        };
+        document.getElementById("maxCallsRange").value = String(Math.max(1, Number(state.controls.max_calls || 0) || 1));
+        document.getElementById("concurrencyRange").value = String(Math.max(1, Number(state.controls.concurrency || 0) || 1));
+        document.getElementById("maxCallsValue").textContent = String(Math.max(1, Number(state.controls.max_calls || 0) || 1));
+        document.getElementById("concurrencyValue").textContent = String(Math.max(1, Number(state.controls.concurrency || 0) || 1));
+        document.getElementById("pauseState").textContent = `Stop state: ${state.controls.stop_requested ? "Paused" : "Active"}`;
+        document.getElementById("controlState").textContent =
+          `Queued for next run • max_calls=${state.controls.max_calls || 0}, concurrency=${state.controls.concurrency || 1}, paused=${state.controls.stop_requested ? "yes" : "no"}`;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function fetchLaunchState() {
+      try {
+        const res = await fetch("/api/dashboard/outbound-launch-state", { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("Could not load launch state.");
+        }
+        const payload = await res.json();
+        const launch = payload?.state || {};
+        const launchState = document.getElementById("launchState");
+        const isRunning = !!launch.running;
+        const pid = Number(launch.pid || 0);
+        launchState.classList.remove("ok", "warn", "bad");
+
+        if (isRunning) {
+          launchState.textContent = `Launcher: Running (PID ${pid || "—"})`;
+          launchState.classList.add("ok");
+          startBtn.disabled = false;
+          stopBtn.disabled = false;
+          startStatus.textContent = "Launcher running";
+        } else {
+          launchState.textContent = `Launcher: ${launch.status === "not_running" ? "Not running" : "Stopped"} (PID ${pid || "—"})`;
+          launchState.classList.add("warn");
+          stopBtn.disabled = true;
+          if (launch.status === "not_running") {
+            startStatus.textContent = "Launcher not running";
+          }
+        }
+      } catch (err) {
+        const launchState = document.getElementById("launchState");
+        launchState.classList.remove("ok", "warn");
+        launchState.classList.add("bad");
+        launchState.textContent = "Launcher: state unavailable";
+        console.error(err);
+      }
+    }
+
+    async function updateOutboundControls(patch) {
+      const body = {
+        ...(state.controls || {}),
+        ...patch,
+      };
+      try {
+        const res = await fetch("/api/dashboard/outbound-controls", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          throw new Error("Could not save outbound controls.");
+        }
+        const payload = await res.json();
+        const controls = payload?.controls || {};
+        state.controls = {
+          max_calls: Number(controls.max_calls || 0),
+          concurrency: Number(controls.concurrency || 0),
+          stop_requested: controls.stop_requested || false,
+        };
+        fetchOutboundControls();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function msToSeconds(ms) {
+      const v = Number(ms);
+      if (!Number.isFinite(v)) return "—";
+      return `${Math.round(v / 1000)}s`;
+    }
+
+    function formatCallTime(ts) {
+      if (!ts) return "—";
+      const d = new Date(typeof ts === "number" ? ts * 1000 : ts);
+      if (Number.isNaN(d.getTime())) {
+        return "—";
+      }
+      return d.toLocaleString();
+    }
+
+    function renderCallDetail(call) {
+      const title = document.getElementById("callDetailTitle");
+      const sub = document.getElementById("callDetailSub");
+      const meta1 = document.getElementById("callMetaLine1");
+      const meta2 = document.getElementById("callMetaLine2");
+      const meta3 = document.getElementById("callMetaLine3");
+      const tools = document.getElementById("callTools");
+      const outcome = document.getElementById("callOutcome");
+      const recording = document.getElementById("callRecordingLink");
+      const transcriptLink = document.getElementById("callTranscriptLink");
+      const transcript = document.getElementById("callTranscript");
+
+      const business = call.clinic_name || "Unknown business";
+      const callId = call.call_id || "—";
+      const to = call.to_number || "—";
+      const from = call.from_number || "—";
+      const duration = msToSeconds(call.duration_ms);
+      const transcriptText = Array.isArray(call.transcript_lines) && call.transcript_lines.length
+        ? call.transcript_lines.join("\n")
+        : String(call.transcript || "").trim();
+
+      title.textContent = business;
+      sub.textContent = `Call ID: ${callId}`;
+      meta1.textContent = `To: ${to} · From: ${from}`;
+      meta2.textContent = `Status: ${call.status || "unknown"}`;
+      meta3.textContent = `Duration: ${duration}`;
+
+      if (Array.isArray(call.tool_calls) && call.tool_calls.length) {
+        tools.innerHTML = call.tool_calls
+          .map((tool) => `<div>${escapeHtml(String(tool?.tool_name || tool?.name || JSON.stringify(tool)))}</div>`)
+          .join("");
+      } else {
+        tools.innerHTML = "<span class=\"hint\">No tool calls.</span>";
+      }
+
+      const callSummary = call.call_analysis && call.call_analysis.call_summary ? call.call_analysis.call_summary : "—";
+      const callSuccessful = call.call_analysis && call.call_analysis.call_successful === false
+        ? "No"
+        : (call.call_analysis && call.call_analysis.call_successful === true
+            ? "Yes"
+            : "—");
+      outcome.innerHTML = `<div class=\"detail-line\">Summary: ${escapeHtml(callSummary)}</div>
+                          <div class=\"detail-line\">Call successful: ${escapeHtml(callSuccessful)}</div>
+                          <div class=\"detail-line\">Started: ${escapeHtml(formatCallTime(call.call_started_at))}</div>
+                          <div class=\"detail-line\">Ended: ${escapeHtml(formatCallTime(call.call_ended_at))}</div>`;
+
+      if (call.recording_url) {
+        recording.innerHTML = `<a href=\"${escapeHtml(call.recording_url)}\" target=\"_blank\" rel=\"noreferrer\">Open recording</a>`;
+      } else if (call.recording_multi_channel_url) {
+        recording.innerHTML = `<a href=\"${escapeHtml(call.recording_multi_channel_url)}\" target=\"_blank\" rel=\"noreferrer\">Open recording (multi-channel)</a>`;
+      } else {
+        recording.textContent = "No recording artifact yet.";
+      }
+
+      if (transcriptText) {
+        if (window.__retellTranscriptUrl) {
+          URL.revokeObjectURL(window.__retellTranscriptUrl);
+          window.__retellTranscriptUrl = null;
+        }
+        window.__retellTranscriptUrl = URL.createObjectURL(new Blob([transcriptText], { type: "text/plain;charset=utf-8" }));
+        transcriptLink.innerHTML = `<a href=\"${escapeHtml(window.__retellTranscriptUrl)}\" target=\"_blank\" rel=\"noreferrer\">Open transcript</a>`;
+      } else if (call.public_log_url) {
+        transcriptLink.innerHTML = `<a href=\"${escapeHtml(call.public_log_url)}\" target=\"_blank\" rel=\"noreferrer\">Open transcript source</a>`;
+      } else {
+        transcriptLink.textContent = "No transcript artifact yet.";
+      }
+
+      if (Array.isArray(call.transcript_lines) && call.transcript_lines.length) {
+        transcript.innerHTML = call.transcript_lines
+          .map((line) => `<div class=\"detail-line\">${escapeHtml(line)}</div>`)
+          .join("");
+      } else if (call.transcript) {
+        transcript.textContent = call.transcript;
+      } else {
+        transcript.textContent = "No transcript available.";
+      }
+    }
+
+    async function openCallDetail(callId) {
+      if (!callId) return;
+      try {
+        const res = await fetch(`/api/dashboard/call-detail?call_id=${encodeURIComponent(callId)}`, { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("Could not load call details.");
+        }
+        const payload = await res.json();
+        if (!payload.ok || !payload.call) {
+          throw new Error("Call record not found.");
+        }
+        renderCallDetail(payload.call);
+        const modal = document.getElementById("callDetailModal");
+        modal.classList.add("open");
+        state.detailOpen = true;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function stateDot(state) {
+      return `<span class="dot ${statusClassByState[state] || "idle"}"></span>${state}`;
+    }
+
+    function chip(k, v) {
+      return `<span class=\"chip\">${k}: ${v}</span>`;
+    }
+
+    async function fetchStatus() {
+      try {
+        const [statusRes, summaryRes] = await Promise.all([
+          fetch("/api/dashboard/outbound", { cache: "no-store" }),
+          fetch("/api/dashboard/summary", { cache: "no-store" }),
+        ]);
+        const status = await statusRes.json();
+        const summary = await summaryRes.json();
+
+        document.getElementById("campaign").textContent =
+          `Campaign: ${status.campaign_id || "unknown"} • Tenant: ${status.tenant || "unknown"}`;
+
+        const ping = document.getElementById("ping");
+        const pingText = document.getElementById("stateText");
+        if (summary && summary.status) {
+          if (summary.status === "green") {
+            ping.className = "pulse ok";
+            pingText.textContent = "Dashboard API: healthy";
+          } else if (summary.status === "red") {
+            ping.className = "pulse bad";
+            pingText.textContent = "Dashboard API: check alerts";
+          } else {
+            ping.className = "pulse";
+            pingText.textContent = "Dashboard API: warning";
+          }
+        } else {
+          ping.className = "pulse";
+          pingText.textContent = "Fetching…";
+        }
+
+        document.getElementById("kpiQueue").textContent = fmtInt(status.intake?.queue_size);
+        document.getElementById("kpiDaily").textContent = `${fmtInt(status.dispatch?.daily_count)} / ${fmtInt(status.dispatch?.call_window_caps?.daily_call_cap)} today`;
+        document.getElementById("kpiCalls").textContent = fmtInt(status.transcripts?.call_artifact_count);
+        document.getElementById("kpiJourneys").textContent = fmtInt(status.journeys?.count);
+        document.getElementById("kpiPipeline").textContent = status.pipeline_health?.stage || "idle";
+
+        const timeline = document.getElementById("timeline");
+        timeline.innerHTML = "";
+        stepLabels.forEach((step) => {
+          const s = status.step_status?.[step.key] || "idle";
+          const node = document.createElement("div");
+          node.className = "step";
+          node.innerHTML = `<div class="label">${step.label}</div>
+                           <div class="status">${stateDot(s)} <span>${step.key}</span></div>`;
+          timeline.appendChild(node);
+        });
+
+        const conversion = document.getElementById("conversion");
+        const conversionCounts = status.journeys?.conversion_counts || {};
+        if (Object.keys(conversionCounts).length) {
+          conversion.innerHTML = Object.entries(conversionCounts)
+            .map(([k, v]) => chip(k, v))
+            .join(" ");
+        } else {
+          conversion.textContent = "No mapped journeys yet.";
+        }
+
+        const callStatus = document.getElementById("callStatus");
+        const statusCounts = status.transcripts?.call_status_counts || {};
+        if (Object.keys(statusCounts).length) {
+          callStatus.innerHTML = Object.entries(statusCounts)
+            .map(([k, v]) => chip(k, v))
+            .join(" ");
+        } else {
+          callStatus.textContent = "No call artifacts yet.";
+        }
+
+        const segments = document.getElementById("segments");
+        const segmentMap = status.intake?.segments || {};
+        segments.innerHTML = Object.keys(segmentMap).length
+          ? Object.entries(segmentMap).map(([k, v]) => chip(k, v)).join(" ")
+          : "<span class='hint'>No segment metadata yet.</span>";
+
+        const latestCalls = document.getElementById("latestCalls");
+        const calls = status.transcripts?.latest_calls || [];
+        if (!calls.length) {
+          latestCalls.innerHTML = "<tr><td colspan='4' class='hint'>Waiting for calls...</td></tr>";
+        } else {
+          latestCalls.innerHTML = calls.map((row) => {
+            const callId = row.call_id || "-";
+            const nameFallback = row.to_number || row.phone || row.from_number || "";
+            const resolvedName = row.clinic_name && row.clinic_name !== "Unknown business" ? row.clinic_name : (nameFallback || "Unknown business");
+            const num = row.to_number || "-";
+            const st = row.status || "-";
+            const transcript = row.transcript_snippet || "";
+            const artifactLookup = callId !== "-"
+              ? `call_id=${encodeURIComponent(callId)}`
+              : (num !== "-" ? `to_number=${encodeURIComponent(num)}` : "");
+            const callArtifactLink = artifactLookup
+              ? `<a href="/api/dashboard/call-artifact?${artifactLookup}" target="_blank" rel="noreferrer" class=\"artifact-link\" data-call-id=\"${escapeHtml(callId)}\">Open full call artifact</a>`
+              : "<span class=\"hint\">Transcript</span>";
+            return `<tr>
+              <td>
+                <a href=\"#\" class=\"business-link\" data-call-id=\"${escapeHtml(callId)}\">${escapeHtml(resolvedName)}</a>
+              </td>
+              <td>${num}</td>
+              <td class=\"transcript-cell\" title=\"${escapeHtml(transcript)}\">${callArtifactLink}</td>
+              <td>${st}</td>
+            </tr>`;
+          }).join("");
+        }
+
+        const errEl = document.getElementById("latestError");
+        if (status.intake?.queue_file && status.intake?.queue_file_exists !== false) {
+          errEl.style.display = "none";
+          if (!document.title.includes("Live")) {
+            document.title = "Eve Outbound Dialing - Live Dashboard";
+          }
+          errEl.style.display = "none";
+          errEl.textContent = "";
+        } else {
+          errEl.textContent = "Missing queue state files.";
+          errEl.style.display = "block";
+        }
+      } catch (err) {
+        const ping = document.getElementById("ping");
+        const pingText = document.getElementById("stateText");
+        ping.className = "pulse bad";
+        pingText.textContent = "Dashboard API error";
+        console.error(err);
+      }
+    }
+
+    const startBtn = document.getElementById("startBtn");
+    const startStatus = document.getElementById("startStatus");
+    let startInFlight = false;
+    const stopBtn = document.getElementById("stopBtn");
+    let stopInFlight = false;
+    stopBtn.disabled = true;
+    startBtn.addEventListener("click", async () => {
+      if (startInFlight) {
+        return;
+      }
+      startInFlight = true;
+      startBtn.disabled = true;
+      const oldLabel = startBtn.textContent;
+      startBtn.textContent = "Starting...";
+      startStatus.textContent = "Starting outbound dialing in browser...";
+      try {
+        const res = await fetch("/api/dashboard/start-outbound", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || "Could not start dialing.");
+        }
+        const payload = await res.json();
+        const started = payload?.start || {};
+        if (started.status === "already_running") {
+          startStatus.textContent = `Already running (PID ${started.pid || "—"})`;
+        } else {
+          startStatus.textContent = `Started (PID ${started.pid || "—"})`;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Could not start dialing.";
+        startStatus.textContent = msg;
+      } finally {
+        startBtn.disabled = false;
+        await fetchLaunchState();
+        startBtn.textContent = oldLabel;
+        startInFlight = false;
+        setTimeout(() => {
+          if (!startInFlight && startBtn.textContent === oldLabel && startStatus.textContent.startsWith("Started (PID")) {
+            startStatus.textContent = "Running";
+          }
+        }, 5000);
+      }
+    });
+    stopBtn.addEventListener("click", async () => {
+      if (stopInFlight) {
+        return;
+      }
+      stopInFlight = true;
+      stopBtn.disabled = true;
+      const oldLabel = stopBtn.textContent;
+      stopBtn.textContent = "Stopping...";
+      try {
+        const res = await fetch("/api/dashboard/stop-outbound", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || "Could not stop dialing.");
+        }
+        const payload = await res.json();
+        const stopped = payload?.stop || {};
+        if (stopped.status === "stopped") {
+          startStatus.textContent = `Stopped (PID ${stopped.pid || "—"})`;
+        } else if (stopped.status === "not_running") {
+          startStatus.textContent = `No active launcher found (PID ${stopped.pid || "—"})`;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Could not stop dialing.";
+        startStatus.textContent = msg;
+      } finally {
+        stopBtn.disabled = false;
+        await fetchLaunchState();
+        stopBtn.textContent = oldLabel;
+        stopInFlight = false;
+        setTimeout(() => {
+          if (!stopInFlight && startStatus.textContent.startsWith("Stopped (PID")) {
+            startStatus.textContent = "Stopped";
+          }
+        }, 5000);
+      }
+    });
+
+    const maxCallsRange = document.getElementById("maxCallsRange");
+    const maxCallsValue = document.getElementById("maxCallsValue");
+    const concurrencyRange = document.getElementById("concurrencyRange");
+    const concurrencyValue = document.getElementById("concurrencyValue");
+    const applyMaxCallsBtn = document.getElementById("applyMaxCallsBtn");
+    const applyConcurrencyBtn = document.getElementById("applyConcurrencyBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const resumeBtn = document.getElementById("resumeBtn");
+
+    maxCallsRange.addEventListener("input", () => {
+      maxCallsValue.textContent = maxCallsRange.value;
+    });
+    concurrencyRange.addEventListener("input", () => {
+      concurrencyValue.textContent = concurrencyRange.value;
+    });
+
+    applyMaxCallsBtn.addEventListener("click", async () => {
+      await updateOutboundControls({
+        max_calls: Number(maxCallsRange.value),
+        stop_requested: false,
+      });
+    });
+    applyConcurrencyBtn.addEventListener("click", async () => {
+      await updateOutboundControls({
+        concurrency: Number(concurrencyRange.value),
+        stop_requested: false,
+      });
+    });
+    pauseBtn.addEventListener("click", async () => {
+      await updateOutboundControls({ stop_requested: true });
+    });
+    resumeBtn.addEventListener("click", async () => {
+      await updateOutboundControls({ stop_requested: false });
+    });
+
+    const latestCallsTable = document.getElementById("latestCalls");
+    latestCallsTable.addEventListener("click", (event) => {
+      const anchor = event.target.closest(".business-link");
+      const artifactAnchor = event.target.closest(".artifact-link");
+      if (artifactAnchor) {
+        return;
+      }
+      if (!anchor) {
+        return;
+      }
+      event.preventDefault();
+      const callId = anchor.dataset.callId;
+      if (!callId || callId === "-") {
+        return;
+      }
+      openCallDetail(callId);
+    });
+
+    const closeBtn = document.getElementById("closeCallDetail");
+    const modal = document.getElementById("callDetailModal");
+    closeBtn.addEventListener("click", closeCallDetail);
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        closeCallDetail();
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.detailOpen) {
+        closeCallDetail();
+      }
+    });
+
+    fetchStatus();
+    fetchOutboundControls();
+    setInterval(fetchStatus, 3000);
+    setInterval(fetchOutboundControls, 5000);
+    setInterval(fetchLaunchState, 3000);
+    fetchLaunchState();
+  </script>
+</body>
+</html>

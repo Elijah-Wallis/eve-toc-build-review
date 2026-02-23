@@ -1,0 +1,97 @@
+tests:
+  - id: TC-01
+    name: Hostile interruption
+    scenario: User interrupts with escalation and asks to stop calls
+    expected_start_state: opener
+    turns:
+      - user: "This is a complete waste of time, take me off the list now"
+      - expected: dnc
+    expected_transitions:
+      - from: opener
+        to: dnc
+    expected_tool_calls:
+      - mark_dnc_compliant:
+          reason: USER_REQUEST
+    expected_final_state: done
+
+  - id: TC-02
+    name: Answering service objection
+    scenario: User says they use an answering service
+    turns:
+      - user: "We have an answering service that answers for us"
+      - user: "Our answering service takes name and number"
+      - assistant_state: objection_answering_service
+      - user: "I guess okay"
+      - assistant_state: send_package_prompt
+    expected_transitions:
+      - from: opener
+        to: discovery
+      - from: discovery
+        to: pain_denied
+      - from: pain_denied
+        to: objection_answering_service
+      - from: objection_answering_service
+        to: send_package_prompt
+    expected_tool_calls: []
+
+  - id: TC-03
+    name: Sales suspicion handling
+    scenario: User challenges if this is a sales call
+    turns:
+      - user: "Are you a sales call?"
+      - user: "It's handled by a marketing agency"
+      - assistant_state: objection_sales
+      - user: "No, don't send it"
+      - assistant_state: send_package_prompt
+    expected_transitions:
+      - from: opener
+        to: discovery
+      - from: discovery
+        to: pain_denied
+      - from: pain_denied
+        to: objection_sales
+      - from: objection_sales
+        to: send_package_prompt
+    expected_guardrails:
+      - no_hard_pressure
+      - no_deceptive_claims
+
+  - id: TC-04
+    name: Email routing override
+    scenario: User gives manager email in response to generic mailbox objection
+    turns:
+      - user: "Send it to info@clinic.com"
+      - assistant_state: objection_info_email
+      - user: "Use manager@clinic.com instead"
+      - assistant_state: request_recipient_email
+      - user: "Send to clinicalops@clinic.com"
+      - assistant_state: send_package
+    expected_tool_calls:
+      - send_evidence_package:
+          required_args:
+            recipient_email: clinicalops@clinic.com
+
+  - id: TC-05
+    name: Short reply latency
+    scenario: User responds with one-word confirmation
+    turns:
+      - user: "yes"
+      - assistant_state: pain_admitted
+    expected_transitions:
+      - from: opener
+        to: discovery
+      - from: discovery
+        to: pain_admitted
+
+  - id: TC-06
+    name: Fallback route
+    scenario: Unclear answer after discovery
+    turns:
+      - user: "maybe maybe"
+      - user: "uhhh send"
+      - assistant_state: send_package_prompt
+    expected_transitions:
+      - from: discovery
+        to: pain_denied
+      - from: pain_denied
+        to: send_package_prompt

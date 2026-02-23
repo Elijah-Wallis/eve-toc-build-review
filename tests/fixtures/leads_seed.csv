@@ -1,0 +1,5 @@
+business_name,website,phone,email,city,state,category,ad_active,google_ads_monthly,employee_count,reviews_count,pain_signals
+Prime Smile Dental,https://primesmiledental.com,+13105550101,manager@primesmiledental.com,Dallas,TX,dental,true,4500,12,180,"missed call,booking backlog"
+Glow Beauty Studio,https://glowbeauty.example,+13105550102,info@glowbeauty.example,Plano,TX,beauty,false,0,3,24,""
+North Star Plastic Surgery,https://northstarplasticsurgery.com,+13105550103,frontdesk@northstarplasticsurgery.com,Houston,TX,plastic surgery,true,6200,18,95,"voicemail overflow"
+Lakeview Auto Repair,https://lakeviewauto.example,+13105550104,owner@lakeviewauto.example,Austin,TX,auto repair,true,2000,6,70,"busy line"

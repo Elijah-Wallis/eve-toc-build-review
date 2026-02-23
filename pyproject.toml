@@ -1,0 +1,31 @@
+[project]
+name = "retell-ws-brain"
+version = "0.1.0"
+description = "Production-grade Retell Custom LLM WebSocket brain with deterministic VIC gates"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.12.0",
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0.0",
+]
+gemini = [
+  "google-genai>=1.62.0",
+]
+openai = [
+  "openai>=1.0.0",
+]
+ops = [
+  "websockets>=12.0",
+  "prometheus-client>=0.20.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "tests_expressive"]
+addopts = "-q"
+pythonpath = ["."]

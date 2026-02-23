@@ -1,0 +1,2 @@
+{"response_type":"update_agent","agent_config":{"responsiveness":0.8,"interruption_sensitivity":0.5,"reminder_trigger_ms":15000,"reminder_max_count":2}}
+

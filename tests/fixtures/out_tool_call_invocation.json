@@ -1,0 +1,2 @@
+{"response_type":"tool_call_invocation","tool_call_id":"00000000-0000-0000-0000-000000000000","name":"get_pricing","arguments":"{\"service_id\":\"general\"}"}
+

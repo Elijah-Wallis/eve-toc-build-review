@@ -1,0 +1,22 @@
+{
+  "session_id": "fixture_a",
+  "config": {
+    "turn_timeout_sec": 8,
+    "soft_timeout_enabled": true,
+    "soft_timeout_sec": 0.8,
+    "interruptions_enabled": true,
+    "interruption_sensitivity": 0.6,
+    "turn_eagerness": "NORMAL",
+    "expressive_scope_words": 5,
+    "target_voice_id": "neutral_default"
+  },
+  "steps": [
+    {"kind": "audio", "energy": 4000, "advance_ms": 20},
+    {"kind": "audio", "energy": 4200, "advance_ms": 20},
+    {"kind": "audio", "energy": 4500, "advance_ms": 20},
+    {"kind": "audio", "energy": 0, "advance_ms": 1200},
+    {"kind": "audio", "energy": 0, "advance_ms": 200},
+    {"kind": "audio", "energy": 5000, "advance_ms": 20},
+    {"kind": "audio", "energy": 4500, "advance_ms": 20}
+  ]
+}

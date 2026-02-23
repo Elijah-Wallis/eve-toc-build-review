@@ -1,0 +1,20 @@
+
+services:
+  eve_autonomous_node:
+    build: .
+    container_name: eve_autonomous_node
+    restart: always
+    environment:
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+    entrypoint: []
+    command: ["python", "main.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).getcode() == 200"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
