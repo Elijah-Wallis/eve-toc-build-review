@@ -354,6 +354,7 @@ def _stop_outbound_session() -> tuple[bool, dict[str, Any], str]:
     return False, {"pid": prior_pid}, f"Could not stop PID {prior_pid}."
 
 
+@app.get("/health")
 @app.get("/healthz")
 async def healthz() -> dict[str, bool]:
     return {"ok": True}
